@@ -23,6 +23,7 @@ auto get_lr_pair(const fs::path& base_dir, unsigned int start, unsigned int end)
     assert(fs::exists(base_dir / "right"));
 
     unsigned int idx = static_cast<unsigned int>(-1);
+    std::cout << "Reading files: \n";
     for (const auto& l_it: fs::directory_iterator(base_dir / "left")) {
         ++idx;
         if (idx < start) {
@@ -34,11 +35,15 @@ auto get_lr_pair(const fs::path& base_dir, unsigned int start, unsigned int end)
         assert(is_regular_file(l_it));
         const auto l_name = l_it.path();
 
-        const std::string& r_name_part = l_name.stem().string();
-        const auto r_name = fs::path(r_name_part.substr(0, r_name_part.size() - 4) + "right" + l_name.extension().string());
+        std::string r_name_part = l_name.stem().string();
+        r_name_part = r_name_part.substr(0, r_name_part.size() - 4);
+        r_name_part += "right";
+        r_name_part += l_name.extension().c_str();
+        const auto r_name = l_name.parent_path().parent_path() / "right" / r_name_part;
         std::cout << l_name << '\t' << r_name << '\n';
         pair.emplace_back(cv::imread(l_name.c_str(), cv::ImreadModes::IMREAD_COLOR), cv::imread(r_name.c_str(), cv::ImreadModes::IMREAD_COLOR));
     }
+    std::cout << "\n Files read\nPress key to compute per-file";
     return pair;
 }
 
@@ -105,7 +110,7 @@ int main() {
         auto disparity = filter.compute(pair.left, pair.right);
         cv::imshow("left", pair.left);
         cv::imshow("disp", disparity);
-        cv::waitKey();
+        cv::waitKey();  // @TODO: make it possible to write the disparity image
     }
     return 0;
 }
