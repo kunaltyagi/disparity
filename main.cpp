@@ -1,17 +1,21 @@
 #include <iostream>
-#include <filesystem>
+/* #include <filesystem> */
 #include <memory>
+
+#include <boost/filesystem.hpp>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/ximgproc.hpp>
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 auto get_lr_pair(const fs::path& base_dir, unsigned int start, unsigned int end) {
     struct LR_Pair {
         cv::Mat left, right;
+        LR_Pair() = default;
+        LR_Pair(cv::Mat a, cv::Mat b): left(a), right(b) {}
     };
     std::vector<LR_Pair> pair;
 
@@ -27,13 +31,13 @@ auto get_lr_pair(const fs::path& base_dir, unsigned int start, unsigned int end)
         if (idx >= end) {
             break;
         }
-        assert(l_it.is_regular_file());
+        assert(is_regular_file(l_it));
         const auto l_name = l_it.path();
 
-        std::string r_name_part = l_name.stem();
+        const std::string& r_name_part = l_name.stem().string();
         const auto r_name = fs::path(r_name_part.substr(0, r_name_part.size() - 4) + "right" + l_name.extension().string());
         std::cout << l_name << '\t' << r_name << '\n';
-        pair.push_back({cv::imread(l_name, cv::ImreadModes::IMREAD_COLOR), cv::imread(r_name, cv::ImreadModes::IMREAD_COLOR)});
+        pair.emplace_back(cv::imread(l_name.c_str(), cv::ImreadModes::IMREAD_COLOR), cv::imread(r_name.c_str(), cv::ImreadModes::IMREAD_COLOR));
     }
     return pair;
 }
@@ -59,7 +63,7 @@ struct DisparityFiltered {
         config.num_disparities = config.num_disparities * 16; // multiple of 16
         config.block_size = 2 * config.block_size + 1; // always odd, >=1
         int P_factor = 3 * config.block_size * config.block_size; // 3 is number of channels
-        
+
         left_matcher = cv::StereoSGBM::create(
             0, // min disparity
             config.num_disparities,
@@ -74,17 +78,17 @@ struct DisparityFiltered {
             config.mode  // MODE_SGBM, MODE_HH, MODE_SGBM_3WAY, MODE_HH4
         );
         right_matcher = cv::ximgproc::createRightMatcher(left_matcher);
-        
+
         filter = cv::ximgproc::createDisparityWLSFilter(left_matcher);
         filter->setLambda(config.lambda);  // 8000
         filter->setSigmaColor(config.sigma);  // 0.8 - 2.0
         filter->setLRCthresh(config.lrc_threshold);  // 24 is 1.5 pixels
         filter->setDepthDiscontinuityRadius(config.block_size + 1);
     }
-    
+
     cv::Mat compute(cv::Mat left, cv::Mat right) {
         cv::Mat left_disp, right_disp, filtered_disp;
-        
+
         left_matcher->compute(left, right, left_disp);
         left_matcher->compute(right, left, right_disp);
 
